@@ -1,0 +1,90 @@
+-- En yakın oyuncuya %100 isabetli otomatik saldırı (Roblox Dagger örneği, RemoteEvent ile)
+-- ZWCscripts için, menüden aç/kapat desteği ile
+
+local AutoAttack = {}
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+local RunService = game:GetService("RunService")
+local Camera = workspace.CurrentCamera
+
+-- Hedefte arada duvar var mı? (Raycast ile)
+local function isVisible(targetPart)
+    local origin = Camera.CFrame.Position
+    local direction = (targetPart.Position - origin).Unit * (targetPart.Position - origin).Magnitude
+    local params = RaycastParams.new()
+    params.FilterDescendantsInstances = {LocalPlayer.Character}
+    params.FilterType = Enum.RaycastFilterType.Blacklist
+    local result = workspace:Raycast(origin, direction, params)
+    return not result or (result.Instance:IsDescendantOf(targetPart.Parent))
+end
+
+-- Menzil kontrolü
+local function isInRange(targetPart, maxRange)
+    local dist = (Camera.CFrame.Position - targetPart.Position).Magnitude
+    return dist <= (maxRange or 60)
+end
+
+-- En yakın saldırılabilir oyuncuyu bul
+local function getClosest()
+    local closest, minDist = nil, math.huge
+    for _,plr in ipairs(Players:GetPlayers()) do
+        if plr ~= LocalPlayer and plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") and plr.Character:FindFirstChild("Humanoid") then
+            if plr.Character.Humanoid.Health > 0 then
+                local dist = (Camera.CFrame.Position - plr.Character.HumanoidRootPart.Position).Magnitude
+                if dist < minDist then
+                    closest = plr
+                    minDist = dist
+                end
+            end
+        end
+    end
+    return closest
+end
+
+-- Saldırı fonksiyonu (örnek olarak Dagger kullandım)
+local function attack(targetPlayer)
+    -- ReplicatedStorage ile veya Backpack/Dagger içindeki Remove event ile saldırı yapılabilir
+    local ReplicatedStorage = game:GetService("ReplicatedStorage")
+    local remote = nil
+    pcall(function()
+        remote = ReplicatedStorage.Values.Dagger:FindFirstChild("RemovePlayers")
+    end)
+    -- Alternatif: Dagger Tool'u ile
+    if not remote and LocalPlayer.Backpack:FindFirstChild("Dagger") then
+        remote = LocalPlayer.Backpack.Dagger:FindFirstChild("Remove")
+    end
+    if not remote and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Dagger") then
+        remote = LocalPlayer.Character.Dagger:FindFirstChild("Remove")
+    end
+
+    if remote and typeof(targetPlayer) == "Instance" then
+        -- Parametre oyununa göre değişebilir, genellikle hedef oyuncu veya karakter gönderilir
+        remote:FireServer(targetPlayer)
+    end
+end
+
+-- Ana otomatik saldırı döngüsü
+function AutoAttack.Enable()
+    if AutoAttack._conn then AutoAttack._conn:Disconnect() end
+    AutoAttack._active = true
+    AutoAttack._conn = RunService.RenderStepped:Connect(function()
+        if not AutoAttack._active then return end
+        local closest = getClosest()
+        if closest and closest.Character and closest.Character:FindFirstChild("HumanoidRootPart") then
+            local hrp = closest.Character.HumanoidRootPart
+            if isInRange(hrp, 60) and isVisible(hrp) then
+                attack(closest)
+            end
+        end
+    end)
+end
+
+function AutoAttack.Disable()
+    AutoAttack._active = false
+    if AutoAttack._conn then
+        AutoAttack._conn:Disconnect()
+        AutoAttack._conn = nil
+    end
+end
+
+return AutoAttack
