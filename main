@@ -1,90 +1,174 @@
--- En yakın oyuncuya %100 isabetli otomatik saldırı (Roblox Dagger örneği, RemoteEvent ile)
--- ZWCscripts için, menüden aç/kapat desteği ile
+-- Mobil için modern şeffaf, Tux figürlü avatar değiştirme menüsü
+-- Kaydedilmiş Roblox avatarlarını seçip otomatik giydirir ve resetler
 
-local AutoAttack = {}
+-- Kendi Tux assetId'nizi kullanın!
+local TUX_ASSET_ID = "rbxassetid://15432080" -- Örnek Tux PNG
+
 local Players = game:GetService("Players")
-local LocalPlayer = Players.LocalPlayer
-local RunService = game:GetService("RunService")
-local Camera = workspace.CurrentCamera
+local StarterGui = game:GetService("StarterGui")
+local HttpService = game:GetService("HttpService")
+local player = Players.LocalPlayer
 
--- Hedefte arada duvar var mı? (Raycast ile)
-local function isVisible(targetPart)
-    local origin = Camera.CFrame.Position
-    local direction = (targetPart.Position - origin).Unit * (targetPart.Position - origin).Magnitude
-    local params = RaycastParams.new()
-    params.FilterDescendantsInstances = {LocalPlayer.Character}
-    params.FilterType = Enum.RaycastFilterType.Blacklist
-    local result = workspace:Raycast(origin, direction, params)
-    return not result or (result.Instance:IsDescendantOf(targetPart.Parent))
-end
-
--- Menzil kontrolü
-local function isInRange(targetPart, maxRange)
-    local dist = (Camera.CFrame.Position - targetPart.Position).Magnitude
-    return dist <= (maxRange or 60)
-end
-
--- En yakın saldırılabilir oyuncuyu bul
-local function getClosest()
-    local closest, minDist = nil, math.huge
-    for _,plr in ipairs(Players:GetPlayers()) do
-        if plr ~= LocalPlayer and plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") and plr.Character:FindFirstChild("Humanoid") then
-            if plr.Character.Humanoid.Health > 0 then
-                local dist = (Camera.CFrame.Position - plr.Character.HumanoidRootPart.Position).Magnitude
-                if dist < minDist then
-                    closest = plr
-                    minDist = dist
-                end
-            end
-        end
+-- Roblox avatarlarını çekmek için API (kendi hesapları için)
+local function getUserOutfits()
+    local userId = player.UserId
+    local url = ("https://avatar.roblox.com/v1/users/%d/outfits?itemsPerPage=25"):format(userId)
+    local suc, res = pcall(function()
+        return HttpService:JSONDecode(game:HttpGet(url))
+    end)
+    if suc and res and res.data then
+        return res.data
+    else
+        return {}
     end
-    return closest
 end
 
--- Saldırı fonksiyonu (örnek olarak Dagger kullandım)
-local function attack(targetPlayer)
-    -- ReplicatedStorage ile veya Backpack/Dagger içindeki Remove event ile saldırı yapılabilir
-    local ReplicatedStorage = game:GetService("ReplicatedStorage")
-    local remote = nil
+-- Avatarı giydir (outfitId ile)
+local function wearOutfit(outfitId)
+    local url = ("https://avatar.roblox.com/v1/outfits/%d/wear"):format(outfitId)
     pcall(function()
-        remote = ReplicatedStorage.Values.Dagger:FindFirstChild("RemovePlayers")
+        game:HttpPost(url, "", Enum.HttpContentType.ApplicationJson)
     end)
-    -- Alternatif: Dagger Tool'u ile
-    if not remote and LocalPlayer.Backpack:FindFirstChild("Dagger") then
-        remote = LocalPlayer.Backpack.Dagger:FindFirstChild("Remove")
-    end
-    if not remote and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Dagger") then
-        remote = LocalPlayer.Character.Dagger:FindFirstChild("Remove")
-    end
-
-    if remote and typeof(targetPlayer) == "Instance" then
-        -- Parametre oyununa göre değişebilir, genellikle hedef oyuncu veya karakter gönderilir
-        remote:FireServer(targetPlayer)
-    end
 end
 
--- Ana otomatik saldırı döngüsü
-function AutoAttack.Enable()
-    if AutoAttack._conn then AutoAttack._conn:Disconnect() end
-    AutoAttack._active = true
-    AutoAttack._conn = RunService.RenderStepped:Connect(function()
-        if not AutoAttack._active then return end
-        local closest = getClosest()
-        if closest and closest.Character and closest.Character:FindFirstChild("HumanoidRootPart") then
-            local hrp = closest.Character.HumanoidRootPart
-            if isInRange(hrp, 60) and isVisible(hrp) then
-                attack(closest)
+-- Reset fonksiyonu
+local function resetCharacter()
+    player:LoadCharacter()
+end
+
+-- Menü oluştur
+local function createMenu()
+    if game.CoreGui:FindFirstChild("MobileAvatarMenu") then
+        game.CoreGui.MobileAvatarMenu:Destroy()
+    end
+    local gui = Instance.new("ScreenGui", game.CoreGui)
+    gui.Name = "MobileAvatarMenu"
+    gui.ResetOnSpawn = false
+    gui.IgnoreGuiInset = true
+    gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+
+    -- Ana frame
+    local frame = Instance.new("Frame", gui)
+    frame.Name = "Main"
+    frame.AnchorPoint = Vector2.new(0.5,0.5)
+    frame.Position = UDim2.new(0.5,0,0.5,0)
+    frame.Size = UDim2.new(0, 340, 0, 380)
+    frame.BackgroundColor3 = Color3.fromRGB(34, 43, 62)
+    frame.BackgroundTransparency = 0.17
+    frame.BorderSizePixel = 0
+    frame.Active = true
+    frame.Draggable = true
+
+    -- Modern şeffaflık ve blur efekti
+    local blur = Instance.new("UIGradient", frame)
+    blur.Color = ColorSequence.new{
+        ColorSequenceKeypoint.new(0, Color3.fromRGB(60, 60, 80)),
+        ColorSequenceKeypoint.new(1, Color3.fromRGB(34,43,62))
+    }
+    blur.Transparency = NumberSequence.new{
+        NumberSequenceKeypoint.new(0, 0.38),
+        NumberSequenceKeypoint.new(1, 0.54)
+    }
+
+    -- Tux figürü
+    local tux = Instance.new("ImageLabel", frame)
+    tux.Image = TUX_ASSET_ID
+    tux.Size = UDim2.new(1, 0, 1, 0)
+    tux.Position = UDim2.new(0, 0, 0, 0)
+    tux.BackgroundTransparency = 1
+    tux.ImageTransparency = 0.85 -- Hafif silik/şeffaf
+
+    -- Logo
+    local logo = Instance.new("TextLabel", frame)
+    logo.Text = "AvatarChanger"
+    logo.Font = Enum.Font.GothamBold
+    logo.TextColor3 = Color3.fromRGB(0, 170, 255)
+    logo.TextSize = 26
+    logo.AnchorPoint = Vector2.new(0.5, 0)
+    logo.Size = UDim2.new(0.8,0,0,38)
+    logo.Position = UDim2.new(0.5,0,0,10)
+    logo.BackgroundTransparency = 1
+
+    -- Kapat butonu
+    local kapat = Instance.new("TextButton", frame)
+    kapat.Text = "✕"
+    kapat.Size = UDim2.new(0,36,0,36)
+    kapat.Position = UDim2.new(1,-44,0,8)
+    kapat.BackgroundTransparency = 0.75
+    kapat.TextColor3 = Color3.fromRGB(255,80,80)
+    kapat.Font = Enum.Font.GothamBold
+    kapat.TextSize = 22
+    kapat.BorderSizePixel = 0
+    kapat.ZIndex = 5
+    kapat.MouseButton1Click:Connect(function()
+        gui:Destroy()
+    end)
+
+    -- Küçült butonu
+    local kucult = Instance.new("TextButton", frame)
+    kucult.Text = "—"
+    kucult.Size = UDim2.new(0,36,0,36)
+    kucult.Position = UDim2.new(1,-88,0,8)
+    kucult.BackgroundTransparency = 0.75
+    kucult.TextColor3 = Color3.fromRGB(0,170,255)
+    kucult.Font = Enum.Font.GothamBold
+    kucult.TextSize = 22
+    kucult.BorderSizePixel = 0
+    kucult.ZIndex = 5
+
+    local min = false
+    kucult.MouseButton1Click:Connect(function()
+        min = not min
+        for _,child in ipairs(frame:GetChildren()) do
+            if not (child == kucult or child == kapat or child == logo) then
+                child.Visible = not min
             end
         end
+        if min then
+            frame.Size = UDim2.new(0,120,0,54)
+        else
+            frame.Size = UDim2.new(0,340,0,380)
+        end
     end)
-end
 
-function AutoAttack.Disable()
-    AutoAttack._active = false
-    if AutoAttack._conn then
-        AutoAttack._conn:Disconnect()
-        AutoAttack._conn = nil
+    -- Scrollable avatar listesi
+    local scroll = Instance.new("ScrollingFrame", frame)
+    scroll.AnchorPoint = Vector2.new(0.5,0)
+    scroll.Position = UDim2.new(0.5,0,0,60)
+    scroll.Size = UDim2.new(0.9,0,0.7,0)
+    scroll.CanvasSize = UDim2.new(0,0,0,0)
+    scroll.BackgroundTransparency = 0.75
+    scroll.BorderSizePixel = 0
+    scroll.ScrollBarThickness = 6
+
+    -- Mobil için optimize
+    gui.Enabled = not UIS.KeyboardEnabled
+
+    -- Outfits çek ve listele
+    local outfits = getUserOutfits()
+    local y = 0
+    for _, outfit in ipairs(outfits) do
+        local btn = Instance.new("TextButton", scroll)
+        btn.Size = UDim2.new(1,0,0,42)
+        btn.Position = UDim2.new(0,0,0,y)
+        btn.BackgroundColor3 = Color3.fromRGB(30,45,67)
+        btn.BackgroundTransparency = 0.24
+        btn.Text = outfit.name
+        btn.TextColor3 = Color3.fromRGB(0,170,255)
+        btn.Font = Enum.Font.Gotham
+        btn.TextSize = 20
+        btn.BorderSizePixel = 0
+        btn.AutoButtonColor = true
+
+        btn.MouseButton1Click:Connect(function()
+            wearOutfit(outfit.id)
+            wait(0.7)
+            resetCharacter()
+        end)
+        y = y + 46
     end
+    scroll.CanvasSize = UDim2.new(0,0,0,y)
 end
 
-return AutoAttack
+-- Menü açma fonksiyonu (istersen bir butondan da açabilirsin)
+createMenu()
