@@ -1,15 +1,14 @@
--- Mobil için modern, mat, sade, koyu, figürsüz avatar değiştirme menüsü
--- YouTube/modern mobil gui stilinde, tamamen fonksiyonel ve minimal
+-- KANLI/KIRMIZI AVATAR DEĞİŞTİRİCİ (Mobile, küçük, yavaş yanıp sönen "made by ZWCscripts")
 
-local Players = game:GetService("Players")
 local HttpService = game:GetService("HttpService")
 local UIS = game:GetService("UserInputService")
-local player = Players.LocalPlayer
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
 
--- Avatar listesini çek
+-- API'den outfitleri çek
 local function getUserOutfits()
-    local userId = player.UserId
-    local url = ("https://avatar.roblox.com/v1/users/%d/outfits?itemsPerPage=25"):format(userId)
+    local userId = LocalPlayer.UserId
+    local url = ("https://avatar.roblox.com/v1/users/%d/outfits?itemsPerPage=100"):format(userId)
     local suc, res = pcall(function()
         return HttpService:JSONDecode(game:HttpGet(url))
     end)
@@ -20,149 +19,174 @@ local function getUserOutfits()
     end
 end
 
+-- Outfiti giydir ve reset at
 local function wearOutfit(outfitId)
     local url = ("https://avatar.roblox.com/v1/outfits/%d/wear"):format(outfitId)
     pcall(function()
         game:HttpPost(url, "", Enum.HttpContentType.ApplicationJson)
     end)
+    wait(0.8)
+    LocalPlayer:LoadCharacter()
 end
 
-local function resetCharacter()
-    player:LoadCharacter()
-end
-
+-- Menü oluştur
 local function createMenu()
     if game.CoreGui:FindFirstChild("MobileAvatarMenu") then
         game.CoreGui.MobileAvatarMenu:Destroy()
     end
-    local gui = Instance.new("ScreenGui")
+
+    local gui = Instance.new("ScreenGui", game.CoreGui)
     gui.Name = "MobileAvatarMenu"
-    gui.Parent = game.CoreGui
-    gui.IgnoreGuiInset = true
     gui.ResetOnSpawn = false
+    gui.IgnoreGuiInset = true
     gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 
-    -- Ana frame (mat koyu, hafif yuvarlatılmış)
+    -- Ana panel (mobile küçük)
     local frame = Instance.new("Frame", gui)
     frame.Name = "Main"
     frame.AnchorPoint = Vector2.new(0.5,0.5)
-    frame.Position = UDim2.new(0.5,0,0.5,0)
-    frame.Size = UDim2.new(0, 340, 0, 440)
-    frame.BackgroundColor3 = Color3.fromRGB(26, 28, 34)
-    frame.BackgroundTransparency = 0
+    frame.Position = UDim2.new(0.5,0,0.60,0)
+    frame.Size = UDim2.new(0, 220, 0, 310)
+    frame.BackgroundColor3 = Color3.fromRGB(30, 5, 10)
+    frame.BackgroundTransparency = 0.22
     frame.BorderSizePixel = 0
     frame.Active = true
     frame.Draggable = true
 
-    local uicorner = Instance.new("UICorner", frame)
-    uicorner.CornerRadius = UDim.new(0, 18) -- Modern köşe
+    -- Gölgeli ve hafif kan efekti için UIGradient
+    local gradient = Instance.new("UIGradient", frame)
+    gradient.Color = ColorSequence.new{
+        ColorSequenceKeypoint.new(0, Color3.fromRGB(80,0,0)),
+        ColorSequenceKeypoint.new(0.7, Color3.fromRGB(30,5,10)),
+        ColorSequenceKeypoint.new(1, Color3.fromRGB(120,15,20))
+    }
+    gradient.Rotation = 90
 
-    -- Logo (üstte)
-    local logo = Instance.new("TextLabel", frame)
-    logo.Text = "Avatar Değiştirici"
-    logo.Font = Enum.Font.GothamBold
-    logo.TextColor3 = Color3.fromRGB(0, 170, 255)
-    logo.TextSize = 26
-    logo.AnchorPoint = Vector2.new(0.5, 0)
-    logo.Size = UDim2.new(0.8,0,0,38)
-    logo.Position = UDim2.new(0.5,0,0,18)
-    logo.BackgroundTransparency = 1
-    logo.ZIndex = 3
+    -- Başlık
+    local title = Instance.new("TextLabel", frame)
+    title.Text = "KANLI AVATAR"
+    title.Font = Enum.Font.GothamBlack
+    title.TextColor3 = Color3.fromRGB(200,0,0)
+    title.TextStrokeTransparency = 0
+    title.TextStrokeColor3 = Color3.fromRGB(50,0,0)
+    title.TextSize = 21
+    title.Size = UDim2.new(1, -64, 0, 34)
+    title.Position = UDim2.new(0, 18, 0, 8)
+    title.BackgroundTransparency = 1
+    title.TextXAlignment = Enum.TextXAlignment.Left
 
-    -- Kapat butonu (modern stil)
+    -- Kapat butonu
     local kapat = Instance.new("TextButton", frame)
     kapat.Text = "✕"
-    kapat.Size = UDim2.new(0,36,0,36)
-    kapat.Position = UDim2.new(1,-44,0,12)
-    kapat.BackgroundColor3 = Color3.fromRGB(36, 40, 50)
-    kapat.BackgroundTransparency = 0
-    kapat.TextColor3 = Color3.fromRGB(255,80,80)
-    kapat.Font = Enum.Font.GothamBold
-    kapat.TextSize = 22
+    kapat.Size = UDim2.new(0,32,0,32)
+    kapat.Position = UDim2.new(1,-38,0,6)
+    kapat.BackgroundTransparency = 1
+    kapat.TextColor3 = Color3.fromRGB(200,0,40)
+    kapat.Font = Enum.Font.GothamBlack
+    kapat.TextSize = 21
     kapat.BorderSizePixel = 0
     kapat.ZIndex = 5
-    local kapatCorner = Instance.new("UICorner", kapat)
-    kapatCorner.CornerRadius = UDim.new(0,12)
-    kapat.AutoButtonColor = true
     kapat.MouseButton1Click:Connect(function()
         gui:Destroy()
     end)
 
-    -- Küçült butonu (modern dikdörtgen)
+    -- Küçült butonu
     local kucult = Instance.new("TextButton", frame)
-    kucult.Text = "─"
-    kucult.Size = UDim2.new(0,36,0,36)
-    kucult.Position = UDim2.new(1,-88,0,12)
-    kucult.BackgroundColor3 = Color3.fromRGB(36, 40, 50)
-    kucult.BackgroundTransparency = 0
-    kucult.TextColor3 = Color3.fromRGB(0,170,255)
-    kucult.Font = Enum.Font.GothamBold
-    kucult.TextSize = 18
+    kucult.Text = "—"
+    kucult.Size = UDim2.new(0,32,0,32)
+    kucult.Position = UDim2.new(1,-70,0,6)
+    kucult.BackgroundTransparency = 1
+    kucult.TextColor3 = Color3.fromRGB(120,0,20)
+    kucult.Font = Enum.Font.GothamBlack
+    kucult.TextSize = 21
     kucult.BorderSizePixel = 0
     kucult.ZIndex = 5
-    local kucultCorner = Instance.new("UICorner", kucult)
-    kucultCorner.CornerRadius = UDim.new(0,12)
-    kucult.AutoButtonColor = true
 
-    -- Scrollable avatar listesi
+    local min = false
+    kucult.MouseButton1Click:Connect(function()
+        min = not min
+        for _,child in ipairs(frame:GetChildren()) do
+            if not (child == kucult or child == kapat or child == title) then
+                child.Visible = not min
+            end
+        end
+        if min then
+            frame.Size = UDim2.new(0,90,0,46)
+        else
+            frame.Size = UDim2.new(0,220,0,310)
+        end
+    end)
+
+    -- Outfits scroll paneli
     local scroll = Instance.new("ScrollingFrame", frame)
     scroll.AnchorPoint = Vector2.new(0.5,0)
-    scroll.Position = UDim2.new(0.5,0,0,68)
-    scroll.Size = UDim2.new(0.9,0,0.75,0)
+    scroll.Position = UDim2.new(0.5,0,0,46)
+    scroll.Size = UDim2.new(0.94,0,0.75,0)
     scroll.CanvasSize = UDim2.new(0,0,0,0)
-    scroll.BackgroundColor3 = Color3.fromRGB(30,33,43)
-    scroll.BackgroundTransparency = 0
+    scroll.BackgroundTransparency = 1
     scroll.BorderSizePixel = 0
-    scroll.ScrollBarThickness = 6
-    scroll.ZIndex = 2
-    local scrollCorner = Instance.new("UICorner", scroll)
-    scrollCorner.CornerRadius = UDim.new(0,12)
+    scroll.ScrollBarThickness = 5
 
-    -- Mobil için optimize (sadece mobilde açılır)
-    gui.Enabled = not UIS.KeyboardEnabled
+    -- BLOODY "made by ZWCscripts" (yavaşça yanıp sönen)
+    local mark = Instance.new("TextLabel", frame)
+    mark.Text = "made by ZWCscripts"
+    mark.Font = Enum.Font.GothamBlack
+    mark.TextSize = 15
+    mark.TextColor3 = Color3.fromRGB(255,10,30)
+    mark.TextStrokeTransparency = 0.25
+    mark.TextStrokeColor3 = Color3.fromRGB(150,0,20)
+    mark.BackgroundTransparency = 1
+    mark.Position = UDim2.new(0,0,1,-23)
+    mark.Size = UDim2.new(1,0,0,19)
+    mark.TextXAlignment = Enum.TextXAlignment.Center
+
+    -- Yanıp sönme efekti (hafif, yavaş, çok parlak değil)
+    spawn(function()
+        local up = true
+        while mark and mark.Parent do
+            for i=0,50 do
+                mark.TextTransparency = 0.05 + (math.abs(math.sin(i/50*math.pi)) * 0.42)
+                mark.TextStrokeTransparency = 0.2 + (math.abs(math.sin(i/50*math.pi)) * 0.5)
+                wait(0.025)
+            end
+            wait(0.2)
+        end
+    end)
+
+    -- Mobile için optimize
+    gui.Enabled = UIS.TouchEnabled and not UIS.KeyboardEnabled
 
     -- Outfits çek ve listele
     local outfits = getUserOutfits()
     local y = 0
     for _, outfit in ipairs(outfits) do
         local btn = Instance.new("TextButton", scroll)
-        btn.Size = UDim2.new(1,0,0,43)
+        btn.Size = UDim2.new(1,0,0,40)
         btn.Position = UDim2.new(0,0,0,y)
-        btn.BackgroundColor3 = Color3.fromRGB(38, 44, 54)
-        btn.BackgroundTransparency = 0
+        btn.BackgroundColor3 = Color3.fromRGB(60,0,10)
+        btn.BackgroundTransparency = 0.16
         btn.Text = outfit.name
-        btn.TextColor3 = Color3.fromRGB(0,170,255)
-        btn.Font = Enum.Font.Gotham
-        btn.TextSize = 20
+        btn.TextColor3 = Color3.fromRGB(200,16,32)
+        btn.Font = Enum.Font.GothamBlack
+        btn.TextSize = 17
         btn.BorderSizePixel = 0
         btn.AutoButtonColor = true
-        local btnCorner = Instance.new("UICorner", btn)
-        btnCorner.CornerRadius = UDim.new(0,9)
+
+        -- Minik avatar resmi
+        if outfit.thumbnailUrl then
+            local thumb = Instance.new("ImageLabel", btn)
+            thumb.Image = outfit.thumbnailUrl
+            thumb.Size = UDim2.new(0,28,0,28)
+            thumb.Position = UDim2.new(0,5,0,6)
+            thumb.BackgroundTransparency = 1
+        end
 
         btn.MouseButton1Click:Connect(function()
             wearOutfit(outfit.id)
-            wait(0.7)
-            resetCharacter()
         end)
-        y = y + 47
+        y = y + 42
     end
     scroll.CanvasSize = UDim2.new(0,0,0,y)
-
-    -- Küçültme logic'i
-    local minimized = false
-    kucult.MouseButton1Click:Connect(function()
-        minimized = not minimized
-        scroll.Visible = not minimized
-        if minimized then
-            frame.Size = UDim2.new(0,120,0,60)
-            logo.Position = UDim2.new(0.5,0,0,7)
-            logo.TextSize = 15
-        else
-            frame.Size = UDim2.new(0,340,0,440)
-            logo.Position = UDim2.new(0.5,0,0,18)
-            logo.TextSize = 26
-        end
-    end)
 end
 
 createMenu()
