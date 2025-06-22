@@ -1,192 +1,410 @@
--- KANLI/KIRMIZI AVATAR DEĞİŞTİRİCİ (Mobile, küçük, yavaş yanıp sönen "made by ZWCscripts")
+-- Roblox: Ortak, kategori destekli, modern not defteri (Notepad) UI
+-- Tüm oyuncular not ekleyip, düzenleyip, silebilir. Kategoriler oluşturulabilir.
+-- Oyun sahibi olmadan çalışır, veri oyun açıkken ortak ve canlıdır (oyun kapanınca sıfırlanır).
+-- Tema: Siyah-Beyaz (dark mode)
+-- Sağ altta oyuncu avatarı, adı, ID gösterir. PC ve mobil uyumlu.
+-- Küçültme & kapatma modern ve kalın.
 
-local HttpService = game:GetService("HttpService")
-local UIS = game:GetService("UserInputService")
+-- Tek script! Bunu sadece bir kez çalıştır: Hem sunucu hem client için kodu içerir.
+
+if not game:IsLoaded() then game.Loaded:Wait() end
 local Players = game:GetService("Players")
-local LocalPlayer = Players.LocalPlayer
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
 
--- API'den outfitleri çek
-local function getUserOutfits()
-    local userId = LocalPlayer.UserId
-    local url = ("https://avatar.roblox.com/v1/users/%d/outfits?itemsPerPage=100"):format(userId)
-    local suc, res = pcall(function()
-        return HttpService:JSONDecode(game:HttpGet(url))
-    end)
-    if suc and res and res.data then
-        return res.data
+local REMOTE_NAME = "NotepadRemote_ZWCscripts_2024"
+
+-- RemoteFunction kurulumu (herkes için tek sefer)
+local remote = ReplicatedStorage:FindFirstChild(REMOTE_NAME)
+if not remote then
+    remote = Instance.new("RemoteFunction")
+    remote.Name = REMOTE_NAME
+    remote.Parent = ReplicatedStorage
+end
+
+-- Sunucu tarafı: Notları hafızada saklar (oyun açıkken)
+if RunService:IsServer() then
+    if not _G._ZWCSHARED_NOTES then
+        _G._ZWCSHARED_NOTES = { categories = {} }
+    end
+    remote.OnServerInvoke = function(player, action, ...)
+        if action == "get" then
+            return _G._ZWCSHARED_NOTES
+        elseif action == "save" then
+            local new = ...
+            if typeof(new) == "table" then
+                _G._ZWCSHARED_NOTES = new
+            end
+            return true
+        end
+    end
+    return -- server kodu burada biter
+end
+
+-- Client tarafı:
+local player = Players.LocalPlayer
+local UIS = game:GetService("UserInputService")
+
+-- Siyah-beyaz tema
+local BG_COLOR = Color3.fromRGB(18,18,18)
+local FRAME_COLOR = Color3.fromRGB(245,245,245)
+local CATEGORY_COLOR = Color3.fromRGB(32,32,32)
+local NOTE_COLOR = Color3.fromRGB(21,21,21)
+local BTN_ACCENT = Color3.fromRGB(255,255,255)
+local BTN_DANGER = Color3.fromRGB(230, 50, 50)
+
+-- UI Kurulumu
+local gui = Instance.new("ScreenGui")
+gui.Name = "ZWCS_Notepad"
+gui.Parent = game:GetService("CoreGui")
+gui.IgnoreGuiInset = true
+gui.ResetOnSpawn = false
+gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+
+local main = Instance.new("Frame", gui)
+main.Position = UDim2.new(0.5, -250, 0.32, 0)
+main.Size = UDim2.new(0, 500, 0, 440)
+main.BackgroundColor3 = BG_COLOR
+main.BackgroundTransparency = 0
+main.BorderSizePixel = 0
+main.Active = true
+main.Draggable = true
+
+-- Başlık
+local title = Instance.new("TextLabel", main)
+title.Text = "NOTEPAD"
+title.Font = Enum.Font.GothamBlack
+title.TextColor3 = BTN_ACCENT
+title.TextSize = 30
+title.Size = UDim2.new(1, -120, 0, 48)
+title.Position = UDim2.new(0, 24, 0, 8)
+title.BackgroundTransparency = 1
+title.TextXAlignment = Enum.TextXAlignment.Left
+
+-- Kapat butonu
+local close = Instance.new("TextButton", main)
+close.Text = "✕"
+close.Font = Enum.Font.GothamBlack
+close.TextSize = 36
+close.Size = UDim2.new(0,54,0,54)
+close.Position = UDim2.new(1,-62,0,4)
+close.BackgroundColor3 = BTN_DANGER
+close.TextColor3 = BTN_ACCENT
+close.BackgroundTransparency = 0
+close.BorderSizePixel = 0
+close.AutoButtonColor = true
+close.ZIndex = 5
+close.TextStrokeTransparency = 0.5
+close.TextStrokeColor3 = Color3.fromRGB(120,0,0)
+close.MouseButton1Click:Connect(function()
+    gui.Enabled = false
+end)
+
+-- Küçült butonu
+local minBtn = Instance.new("TextButton", main)
+minBtn.Text = "—"
+minBtn.Font = Enum.Font.GothamBlack
+minBtn.TextSize = 42
+minBtn.Size = UDim2.new(0,54,0,54)
+minBtn.Position = UDim2.new(1,-120,0,4)
+minBtn.BackgroundColor3 = Color3.fromRGB(80,80,80)
+minBtn.TextColor3 = BTN_ACCENT
+minBtn.BackgroundTransparency = 0
+minBtn.BorderSizePixel = 0
+minBtn.AutoButtonColor = true
+minBtn.TextStrokeTransparency = 0.3
+minBtn.TextStrokeColor3 = Color3.fromRGB(0,0,0)
+local minimized = false
+minBtn.MouseButton1Click:Connect(function()
+    minimized = not minimized
+    for _,child in ipairs(main:GetChildren()) do
+        if not (child == minBtn or child == close or child == title) then
+            child.Visible = not minimized
+        end
+    end
+    if minimized then
+        main.Size = UDim2.new(0, 150, 0, 68)
     else
-        return {}
+        main.Size = UDim2.new(0, 500, 0, 440)
     end
+end)
+
+-- Kategoriler frame
+local catFrame = Instance.new("Frame", main)
+catFrame.Position = UDim2.new(0,24,0,60)
+catFrame.Size = UDim2.new(0,150,1,-92)
+catFrame.BackgroundColor3 = CATEGORY_COLOR
+catFrame.BackgroundTransparency = 0
+catFrame.BorderSizePixel = 0
+
+-- Notlar frame
+local notesFrame = Instance.new("Frame", main)
+notesFrame.Position = UDim2.new(0,184,0,60)
+notesFrame.Size = UDim2.new(1,-208,1,-92)
+notesFrame.BackgroundColor3 = NOTE_COLOR
+notesFrame.BackgroundTransparency = 0
+notesFrame.BorderSizePixel = 0
+
+-- Sağ altta kullanıcı info kutusu
+local userPanel = Instance.new("Frame", gui)
+userPanel.Size = UDim2.new(0,188,0,64)
+userPanel.Position = UDim2.new(1,-192,1,-70)
+userPanel.AnchorPoint = Vector2.new(0,0)
+userPanel.BackgroundColor3 = Color3.fromRGB(12,12,12)
+userPanel.BackgroundTransparency = 0.2
+userPanel.BorderSizePixel = 0
+
+local thumb = Instance.new("ImageLabel", userPanel)
+thumb.Size = UDim2.new(0,52,0,52)
+thumb.Position = UDim2.new(0,4,0.5,-26)
+thumb.BackgroundTransparency = 1
+thumb.Image = "rbxthumb://type=AvatarHeadShot&id="..player.UserId.."&w=180&h=180"
+
+local uname = Instance.new("TextLabel", userPanel)
+uname.Text = player.DisplayName
+uname.Font = Enum.Font.GothamBold
+uname.TextSize = 18
+uname.TextColor3 = BTN_ACCENT
+uname.Size = UDim2.new(1,-60,0.5,0)
+uname.Position = UDim2.new(0,58,0,8)
+uname.BackgroundTransparency = 1
+uname.TextXAlignment = Enum.TextXAlignment.Left
+
+local uid = Instance.new("TextLabel", userPanel)
+uid.Text = "ID: "..player.UserId
+uid.Font = Enum.Font.Gotham
+uid.TextSize = 14
+uid.TextColor3 = Color3.fromRGB(170,170,170)
+uid.Size = UDim2.new(1,-60,0.5,0)
+uid.Position = UDim2.new(0,58,0.5,0)
+uid.BackgroundTransparency = 1
+uid.TextXAlignment = Enum.TextXAlignment.Left
+
+-- Kategori ekle butonu
+local addCat = Instance.new("TextButton", catFrame)
+addCat.Text = "+ Kategori"
+addCat.Font = Enum.Font.GothamBold
+addCat.TextSize = 16
+addCat.Size = UDim2.new(1,0,0,38)
+addCat.Position = UDim2.new(0,0,0,0)
+addCat.BackgroundColor3 = BTN_ACCENT
+addCat.TextColor3 = BG_COLOR
+addCat.AutoButtonColor = true
+addCat.BorderSizePixel = 0
+
+-- Not ekle butonu
+local addNote = Instance.new("TextButton", notesFrame)
+addNote.Text = "+ Not"
+addNote.Font = Enum.Font.GothamBold
+addNote.TextSize = 16
+addNote.Size = UDim2.new(0,100,0,36)
+addNote.Position = UDim2.new(1,-110,0,8)
+addNote.BackgroundColor3 = BTN_ACCENT
+addNote.TextColor3 = BG_COLOR
+addNote.AutoButtonColor = true
+addNote.BorderSizePixel = 0
+
+-- Scroll alanları
+local catScroll = Instance.new("ScrollingFrame", catFrame)
+catScroll.Size = UDim2.new(1,0,1,-46)
+catScroll.Position = UDim2.new(0,0,0,46)
+catScroll.CanvasSize = UDim2.new(0,0,0,0)
+catScroll.BackgroundTransparency = 1
+catScroll.BorderSizePixel = 0
+catScroll.ScrollBarThickness = 6
+
+local notesScroll = Instance.new("ScrollingFrame", notesFrame)
+notesScroll.Size = UDim2.new(1,-14,1,-58)
+notesScroll.Position = UDim2.new(0,7,0,46)
+notesScroll.CanvasSize = UDim2.new(0,0,0,0)
+notesScroll.BackgroundTransparency = 1
+notesScroll.BorderSizePixel = 0
+notesScroll.ScrollBarThickness = 6
+
+-- Kategori & Not veri yapısı
+local categories = {}
+local selectedCat = nil
+
+-- Remote ile veri al/gönder
+local function saveData()
+    pcall(function() remote:InvokeServer("save", {categories=categories}) end)
 end
 
--- Outfiti giydir ve reset at
-local function wearOutfit(outfitId)
-    local url = ("https://avatar.roblox.com/v1/outfits/%d/wear"):format(outfitId)
-    pcall(function()
-        game:HttpPost(url, "", Enum.HttpContentType.ApplicationJson)
-    end)
-    wait(0.8)
-    LocalPlayer:LoadCharacter()
+local function loadData()
+    local data
+    pcall(function() data = remote:InvokeServer("get") end)
+    categories = (data and data.categories) or {}
 end
 
--- Menü oluştur
-local function createMenu()
-    if game.CoreGui:FindFirstChild("MobileAvatarMenu") then
-        game.CoreGui.MobileAvatarMenu:Destroy()
-    end
-
-    local gui = Instance.new("ScreenGui", game.CoreGui)
-    gui.Name = "MobileAvatarMenu"
-    gui.ResetOnSpawn = false
-    gui.IgnoreGuiInset = true
-    gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-
-    -- Ana panel (mobile küçük)
-    local frame = Instance.new("Frame", gui)
-    frame.Name = "Main"
-    frame.AnchorPoint = Vector2.new(0.5,0.5)
-    frame.Position = UDim2.new(0.5,0,0.60,0)
-    frame.Size = UDim2.new(0, 220, 0, 310)
-    frame.BackgroundColor3 = Color3.fromRGB(30, 5, 10)
-    frame.BackgroundTransparency = 0.22
-    frame.BorderSizePixel = 0
-    frame.Active = true
-    frame.Draggable = true
-
-    -- Gölgeli ve hafif kan efekti için UIGradient
-    local gradient = Instance.new("UIGradient", frame)
-    gradient.Color = ColorSequence.new{
-        ColorSequenceKeypoint.new(0, Color3.fromRGB(80,0,0)),
-        ColorSequenceKeypoint.new(0.7, Color3.fromRGB(30,5,10)),
-        ColorSequenceKeypoint.new(1, Color3.fromRGB(120,15,20))
-    }
-    gradient.Rotation = 90
-
-    -- Başlık
-    local title = Instance.new("TextLabel", frame)
-    title.Text = "KANLI AVATAR"
-    title.Font = Enum.Font.GothamBlack
-    title.TextColor3 = Color3.fromRGB(200,0,0)
-    title.TextStrokeTransparency = 0
-    title.TextStrokeColor3 = Color3.fromRGB(50,0,0)
-    title.TextSize = 21
-    title.Size = UDim2.new(1, -64, 0, 34)
-    title.Position = UDim2.new(0, 18, 0, 8)
-    title.BackgroundTransparency = 1
-    title.TextXAlignment = Enum.TextXAlignment.Left
-
-    -- Kapat butonu
-    local kapat = Instance.new("TextButton", frame)
-    kapat.Text = "✕"
-    kapat.Size = UDim2.new(0,32,0,32)
-    kapat.Position = UDim2.new(1,-38,0,6)
-    kapat.BackgroundTransparency = 1
-    kapat.TextColor3 = Color3.fromRGB(200,0,40)
-    kapat.Font = Enum.Font.GothamBlack
-    kapat.TextSize = 21
-    kapat.BorderSizePixel = 0
-    kapat.ZIndex = 5
-    kapat.MouseButton1Click:Connect(function()
-        gui:Destroy()
-    end)
-
-    -- Küçült butonu
-    local kucult = Instance.new("TextButton", frame)
-    kucult.Text = "—"
-    kucult.Size = UDim2.new(0,32,0,32)
-    kucult.Position = UDim2.new(1,-70,0,6)
-    kucult.BackgroundTransparency = 1
-    kucult.TextColor3 = Color3.fromRGB(120,0,20)
-    kucult.Font = Enum.Font.GothamBlack
-    kucult.TextSize = 21
-    kucult.BorderSizePixel = 0
-    kucult.ZIndex = 5
-
-    local min = false
-    kucult.MouseButton1Click:Connect(function()
-        min = not min
-        for _,child in ipairs(frame:GetChildren()) do
-            if not (child == kucult or child == kapat or child == title) then
-                child.Visible = not min
-            end
-        end
-        if min then
-            frame.Size = UDim2.new(0,90,0,46)
-        else
-            frame.Size = UDim2.new(0,220,0,310)
-        end
-    end)
-
-    -- Outfits scroll paneli
-    local scroll = Instance.new("ScrollingFrame", frame)
-    scroll.AnchorPoint = Vector2.new(0.5,0)
-    scroll.Position = UDim2.new(0.5,0,0,46)
-    scroll.Size = UDim2.new(0.94,0,0.75,0)
-    scroll.CanvasSize = UDim2.new(0,0,0,0)
-    scroll.BackgroundTransparency = 1
-    scroll.BorderSizePixel = 0
-    scroll.ScrollBarThickness = 5
-
-    -- BLOODY "made by ZWCscripts" (yavaşça yanıp sönen)
-    local mark = Instance.new("TextLabel", frame)
-    mark.Text = "made by ZWCscripts"
-    mark.Font = Enum.Font.GothamBlack
-    mark.TextSize = 15
-    mark.TextColor3 = Color3.fromRGB(255,10,30)
-    mark.TextStrokeTransparency = 0.25
-    mark.TextStrokeColor3 = Color3.fromRGB(150,0,20)
-    mark.BackgroundTransparency = 1
-    mark.Position = UDim2.new(0,0,1,-23)
-    mark.Size = UDim2.new(1,0,0,19)
-    mark.TextXAlignment = Enum.TextXAlignment.Center
-
-    -- Yanıp sönme efekti (hafif, yavaş, çok parlak değil)
-    spawn(function()
-        local up = true
-        while mark and mark.Parent do
-            for i=0,50 do
-                mark.TextTransparency = 0.05 + (math.abs(math.sin(i/50*math.pi)) * 0.42)
-                mark.TextStrokeTransparency = 0.2 + (math.abs(math.sin(i/50*math.pi)) * 0.5)
-                wait(0.025)
-            end
-            wait(0.2)
-        end
-    end)
-
-    -- Mobile için optimize
-    gui.Enabled = UIS.TouchEnabled and not UIS.KeyboardEnabled
-
-    -- Outfits çek ve listele
-    local outfits = getUserOutfits()
+local function refreshCategories()
+    catScroll:ClearAllChildren()
     local y = 0
-    for _, outfit in ipairs(outfits) do
-        local btn = Instance.new("TextButton", scroll)
-        btn.Size = UDim2.new(1,0,0,40)
+    for cat,notes in pairs(categories) do
+        local btn = Instance.new("TextButton", catScroll)
+        btn.Text = cat
+        btn.Font = Enum.Font.GothamBold
+        btn.TextSize = 16
+        btn.Size = UDim2.new(1,0,0,36)
         btn.Position = UDim2.new(0,0,0,y)
-        btn.BackgroundColor3 = Color3.fromRGB(60,0,10)
-        btn.BackgroundTransparency = 0.16
-        btn.Text = outfit.name
-        btn.TextColor3 = Color3.fromRGB(200,16,32)
-        btn.Font = Enum.Font.GothamBlack
-        btn.TextSize = 17
+        btn.BackgroundColor3 = (selectedCat==cat) and BTN_ACCENT or FRAME_COLOR
+        btn.TextColor3 = (selectedCat==cat) and BG_COLOR or BG_COLOR
+        btn.AutoButtonColor = true
         btn.BorderSizePixel = 0
+        btn.MouseButton1Click:Connect(function()
+            selectedCat = cat
+            refreshCategories()
+            refreshNotes()
+        end)
+        -- Kategori sil
+        local del = Instance.new("TextButton", btn)
+        del.Text = "🗑️"
+        del.Font = Enum.Font.GothamBold
+        del.TextSize = 15
+        del.Size = UDim2.new(0,24,0,24)
+        del.Position = UDim2.new(1,-28,0.5,-12)
+        del.BackgroundTransparency = 1
+        del.TextColor3 = BTN_DANGER
+        del.BorderSizePixel = 0
+        del.MouseButton1Click:Connect(function()
+            categories[cat] = nil
+            if selectedCat == cat then selectedCat = nil end
+            saveData()
+            refreshCategories()
+            refreshNotes()
+        end)
+        y = y + 38
+    end
+    catScroll.CanvasSize = UDim2.new(0,0,0,math.max(y,catScroll.AbsoluteWindowSize.Y))
+end
+
+function refreshNotes()
+    notesScroll:ClearAllChildren()
+    if not selectedCat or not categories[selectedCat] then return end
+    local notlar = categories[selectedCat]
+    local y = 0
+    for i,note in ipairs(notlar) do
+        local btn = Instance.new("TextButton", notesScroll)
+        btn.Size = UDim2.new(1,0,0,46)
+        btn.Position = UDim2.new(0,0,0,y)
+        btn.BackgroundColor3 = FRAME_COLOR
+        btn.TextXAlignment = Enum.TextXAlignment.Left
+        btn.Font = Enum.Font.Gotham
+        btn.TextSize = 17
+        btn.TextColor3 = BG_COLOR
+        btn.BorderSizePixel = 0
+        btn.Text = "📝 "..(note.title or "Not")
         btn.AutoButtonColor = true
 
-        -- Minik avatar resmi
-        if outfit.thumbnailUrl then
-            local thumb = Instance.new("ImageLabel", btn)
-            thumb.Image = outfit.thumbnailUrl
-            thumb.Size = UDim2.new(0,28,0,28)
-            thumb.Position = UDim2.new(0,5,0,6)
-            thumb.BackgroundTransparency = 1
-        end
-
+        -- Notu düzenle
         btn.MouseButton1Click:Connect(function()
-            wearOutfit(outfit.id)
+            local popup = Instance.new("Frame", gui)
+            popup.BackgroundColor3 = BG_COLOR
+            popup.Size = UDim2.new(0,360,0,260)
+            popup.Position = UDim2.new(0.5,-180,0.53,-130)
+            popup.BorderSizePixel = 0
+            popup.BackgroundTransparency = 0.08
+            popup.ZIndex = 10
+
+            local head = Instance.new("TextBox", popup)
+            head.Text = note.title or "Başlık"
+            head.Size = UDim2.new(1,-36,0,40)
+            head.Position = UDim2.new(0,18,0,14)
+            head.Font = Enum.Font.GothamBold
+            head.TextSize = 20
+            head.TextColor3 = BTN_ACCENT
+            head.BackgroundTransparency = 0.12
+            head.ClearTextOnFocus = false
+
+            local area = Instance.new("TextBox", popup)
+            area.MultiLine = true
+            area.Text = note.content or ""
+            area.Size = UDim2.new(1,-36,0,140)
+            area.Position = UDim2.new(0,18,0,62)
+            area.Font = Enum.Font.Gotham
+            area.TextSize = 16
+            area.TextColor3 = FRAME_COLOR
+            area.BackgroundTransparency = 0.14
+            area.ClearTextOnFocus = false
+
+            local saveBtn = Instance.new("TextButton", popup)
+            saveBtn.Text = "Kaydet"
+            saveBtn.Size = UDim2.new(0.5,-20,0,40)
+            saveBtn.Position = UDim2.new(0,18,1,-54)
+            saveBtn.BackgroundColor3 = BTN_ACCENT
+            saveBtn.TextColor3 = BG_COLOR
+            saveBtn.Font = Enum.Font.GothamBold
+            saveBtn.TextSize = 17
+            saveBtn.BorderSizePixel = 0
+
+            local delBtn = Instance.new("TextButton", popup)
+            delBtn.Text = "Sil"
+            delBtn.Size = UDim2.new(0.5,-20,0,40)
+            delBtn.Position = UDim2.new(0.5,2,1,-54)
+            delBtn.BackgroundColor3 = BTN_DANGER
+            delBtn.TextColor3 = BTN_ACCENT
+            delBtn.Font = Enum.Font.GothamBold
+            delBtn.TextSize = 17
+            delBtn.BorderSizePixel = 0
+
+            saveBtn.MouseButton1Click:Connect(function()
+                note.title = head.Text
+                note.content = area.Text
+                saveData()
+                refreshNotes()
+                popup:Destroy()
+            end)
+            delBtn.MouseButton1Click:Connect(function()
+                table.remove(notlar,i)
+                saveData()
+                refreshNotes()
+                popup:Destroy()
+            end)
         end)
-        y = y + 42
+        y = y + 48
     end
-    scroll.CanvasSize = UDim2.new(0,0,0,y)
+    notesScroll.CanvasSize = UDim2.new(0,0,0,math.max(y,notesScroll.AbsoluteWindowSize.Y))
 end
 
-createMenu()
+addCat.MouseButton1Click:Connect(function()
+    local name = "Kategori"..tostring(math.random(100,999))
+    for i=1,99 do
+        if not categories[name] then break end
+        name = "Kategori"..tostring(math.random(100,999))
+    end
+    categories[name] = {}
+    selectedCat = name
+    saveData()
+    refreshCategories()
+    refreshNotes()
+end)
+
+addNote.MouseButton1Click:Connect(function()
+    if not selectedCat then return end
+    local tab = categories[selectedCat]
+    table.insert(tab, {title="Başlık",content="Notunuzu buraya yazın..."})
+    saveData()
+    refreshNotes()
+end)
+
+-- İlk yükleme
+loadData()
+refreshCategories()
+refreshNotes()
+
+-- Tüm clientlar için canlı güncelleme (her 4 sn bir güncelle)
+spawn(function()
+    while true do
+        wait(4)
+        loadData()
+        refreshCategories()
+        refreshNotes()
+    end
+end)
+
+-- PC ve mobil için aç/kapat kısayolu (N tuşu veya mobilde dokunma)
+UIS.InputBegan:Connect(function(input,gp)
+    if gp then return end
+    if (input.KeyCode == Enum.KeyCode.N or (UIS.TouchEnabled and input.UserInputType == Enum.UserInputType.Touch)) then
+        gui.Enabled = not gui.Enabled
+    end
+end)
